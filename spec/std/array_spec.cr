@@ -281,6 +281,15 @@ describe "Array" do
       [1, 2, 3][1, 3]?.should eq([2, 3])
       [1, 2, 3][4, 0]?.should be_nil
     end
+
+    it "gets with range without end" do
+      [1, 2, 3][1..nil]?.should eq([2, 3])
+      [1, 2, 3][4..nil]?.should be_nil
+    end
+
+    it "gets with range without beginning" do
+      [1, 2, 3][nil..1]?.should eq([1, 2])
+    end
   end
 
   describe "[]=" do
@@ -379,6 +388,30 @@ describe "Array" do
       a[nil..2] = [6, 7]
       a.should eq([6, 7, 4, 5])
     end
+
+    it "replaces entire range with a value for empty array (#8341)" do
+      a = [] of Int32
+      a[..] = 6
+      a.should eq([6])
+    end
+
+    it "pushes a new value with []=(...)" do
+      a = [1, 2, 3]
+      a[3..] = 4
+      a.should eq([1, 2, 3, 4])
+    end
+
+    it "replaces entire range with an array for empty array (#8341)" do
+      a = [] of Int32
+      a[..] = [1, 2, 3]
+      a.should eq([1, 2, 3])
+    end
+
+    it "concats a new array with []=(...)" do
+      a = [1, 2, 3]
+      a[3..] = [4, 5, 6]
+      a.should eq([1, 2, 3, 4, 5, 6])
+    end
   end
 
   describe "values_at" do
@@ -471,6 +504,26 @@ describe "Array" do
       a = [1, '2']
       a.concat([3] || ['4'])
       a.should eq([1, '2', 3])
+    end
+  end
+
+  describe "cumulative" do
+    it "returns a new array with cumulative reductions" do
+      a = [1, 4, 2, 5, 3]
+      (a.cumulative { |e| e.reduce { |a, b| {a, b}.max } }).should eq [1, 4, 4, 5, 5]
+      a.should eq [1, 4, 2, 5, 3]
+    end
+
+    it "returns a new array with cumulative sums" do
+      a = [1, 2, 3, 4, 5]
+      a.cumulative(&.sum).should eq [1, 3, 6, 10, 15]
+      a.should eq [1, 2, 3, 4, 5]
+    end
+
+    it "returns a new array with cumulative products" do
+      a = [1, 2, 3, 4, 5]
+      a.cumulative(&.product).should eq [1, 2, 6, 24, 120]
+      a.should eq [1, 2, 3, 4, 5]
     end
   end
 
@@ -1447,6 +1500,15 @@ describe "Array" do
           r.should be_a(Array({Int32, Char, Char}))
           r.should eq([{1, 'a', 'x'}, {2, 'b', 'y'}, {3, 'c', 'z'}])
         end
+
+        it "zips union type (#8608)" do
+          a = [1, 2, 3]
+          b = 'a'..'c'
+          c = ('x'..'z').each
+          r = a.zip(a || b || c)
+          r.should be_a(Array({Int32, Int32 | Char}))
+          r.should eq([{1, 1}, {2, 2}, {3, 3}])
+        end
       end
     end
   end
@@ -1514,6 +1576,15 @@ describe "Array" do
             r = a.zip?(b, c)
             r.should be_a(Array({Int32, Char?, Char?}))
             r.should eq([{1, 'a', 'x'}, {2, 'b', 'y'}, {3, nil, nil}])
+          end
+
+          it "zips union type (#8608)" do
+            a = [1, 2, 3]
+            b = 'a'..'c'
+            c = ('x'..'z').each
+            r = a.zip?(a || b || c)
+            r.should be_a(Array({Int32, Int32 | Char | Nil}))
+            r.should eq([{1, 1}, {2, 2}, {3, 3}])
           end
         end
       end
@@ -1588,12 +1659,23 @@ describe "Array" do
     ary2.should eq([1, 2, 4, 5])
   end
 
+  it "does map_with_index, with offset" do
+    ary = [1, 1, 2, 2]
+    ary2 = ary.map_with_index(10) { |e, i| e + i }
+    ary2.should eq([11, 12, 14, 15])
+  end
+
   it "does map_with_index!" do
     ary = [0, 1, 2]
     ary2 = ary.map_with_index! { |e, i| i * 2 }
-    ary[0].should eq(0)
-    ary[1].should eq(2)
-    ary[2].should eq(4)
+    ary.should eq([0, 2, 4])
+    ary2.should be(ary)
+  end
+
+  it "does map_with_index!, with offset" do
+    ary = [0, 1, 2]
+    ary2 = ary.map_with_index!(10) { |e, i| i * 2 }
+    ary.should eq([20, 22, 24])
     ary2.should be(ary)
   end
 

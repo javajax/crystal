@@ -78,6 +78,8 @@ describe Crystal::Formatter do
   assert_format "[\n1,\n\n2]", "[\n  1,\n\n  2,\n]"
   assert_format "[ # foo\n  1,\n]"
   assert_format "Set{ # foo\n  1,\n}"
+  assert_format "begin\n  array[\n    0 # Zero\n  ]\nend"
+  assert_format "begin\n  array[\n    0, # Zero\n  ]\nend"
 
   assert_format "{1, 2, 3}"
   assert_format "{ {1, 2, 3} }"
@@ -1570,4 +1572,22 @@ describe Crystal::Formatter do
     end
     ex.line_number.should eq(5)
   end
+
+  # #8197
+  assert_format <<-CODE
+    foo
+      .foo1(bar
+        .bar1
+        .bar2)
+    CODE
+
+  assert_format <<-CODE
+    foo.foo1(
+      bar
+        .bar1
+        .bar2)
+    CODE
+
+  assert_format "[] of (Array(T))"
+  assert_format "[] of (((Array(T))))"
 end

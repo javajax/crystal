@@ -1,5 +1,4 @@
-require "c/sys/mman"
-require "thread/linked_list"
+require "crystal/system/thread_linked_list"
 require "./fiber/context"
 require "./fiber/stack_pool"
 
@@ -20,6 +19,9 @@ class Fiber
   @context : Context
   @stack : Void*
   @resume_event : Crystal::Event?
+  @timeout_event : Crystal::Event?
+  # :nodoc:
+  property timeout_select_action : Channel::TimeoutAction?
   protected property stack_bottom : Void*
   property name : String?
   @alive = true
@@ -47,9 +49,21 @@ class Fiber
 
     fiber_main = ->(f : Fiber) { f.run }
 
-    # point to first addressable pointer on the stack (@stack_bottom points past
-    # the stack because the stack grows down):
-    stack_ptr = @stack_bottom - sizeof(Void*)
+    # FIXME: This line shouldn't be necessary (#7975)
+    stack_ptr = nil
+    {% if flag?(:win32) %}
+      # align stack bottom to 16 bytes
+      @stack_bottom = Pointer(Void).new(@stack_bottom.address & ~0x0f_u64)
+
+      # It's the caller's responsibility to allocate 32 bytes of "shadow space" on the stack right
+      # before calling the function (regardless of the actual number of parameters used)
+
+      stack_ptr = @stack_bottom - sizeof(Void*) * 6
+    {% else %}
+      # point to first addressable pointer on the stack (@stack_bottom points past
+      # the stack because the stack grows down):
+      stack_ptr = @stack_bottom - sizeof(Void*)
+    {% end %}
 
     # align the stack pointer to 16 bytes:
     stack_ptr = Pointer(Void*).new(stack_ptr.address & ~0x0f_u64)
@@ -93,6 +107,8 @@ class Fiber
 
     # Delete the resume event if it was used by `yield` or `sleep`
     @resume_event.try &.free
+    @timeout_event.try &.free
+    @timeout_select_action = nil
 
     @alive = false
     Crystal::Scheduler.reschedule
@@ -131,6 +147,34 @@ class Fiber
   # :nodoc:
   def resume_event
     @resume_event ||= Crystal::EventLoop.create_resume_event(self)
+  end
+
+  # :nodoc:
+  def timeout_event
+    @timeout_event ||= Crystal::EventLoop.create_timeout_event(self)
+  end
+
+  # :nodoc:
+  def timeout(timeout : Time::Span?, select_action : Channel::TimeoutAction? = nil) : Nil
+    @timeout_select_action = select_action
+    timeout_event.add(timeout)
+  end
+
+  # :nodoc:
+  def cancel_timeout
+    @timeout_select_action = nil
+    @timeout_event.try &.delete
+  end
+
+  # The current fiber will resume after a period of time
+  # and have the property `timed_out` set to true.
+  # The timeout can be cancelled with `cancel_timeout`
+  def self.timeout(timeout : Time::Span?, select_action : Channel::TimeoutAction? = nil) : Nil
+    Crystal::Scheduler.current_fiber.timeout(timeout, select_action)
+  end
+
+  def self.cancel_timeout
+    Crystal::Scheduler.current_fiber.cancel_timeout
   end
 
   def self.yield
