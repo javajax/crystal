@@ -21,7 +21,7 @@ class Crystal::Doc::Method
   def name
     name = @def.name
     if @generator.is_crystal_repo
-      name.lstrip(PSEUDO_METHOD_PREFIX)
+      name.lchop(PSEUDO_METHOD_PREFIX)
     else
       name
     end
@@ -244,7 +244,7 @@ class Crystal::Doc::Method
         arg_to_html block_arg, io, links: links
       elsif @def.yields
         io << ", " if printed
-        io << "&block"
+        io << '&'
       end
       io << ')'
     end
@@ -268,7 +268,7 @@ class Crystal::Doc::Method
 
   def arg_to_html(arg : Arg, io, links = true)
     if arg.external_name != arg.name
-      name = arg.external_name.empty? ? "_" : arg.external_name
+      name = arg.external_name.presence || "_"
       if Symbol.needs_quotes? name
         HTML.escape name.inspect, io
       else
