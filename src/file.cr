@@ -143,7 +143,7 @@ class File < IO::FileDescriptor
   # File.info("bar", follow_symlinks: false).type.symlink? # => true
   # ```
   def self.info(path : Path | String, follow_symlinks = true) : Info
-    info?(path, follow_symlinks) || raise Errno.new("Unable to get info for '#{path.inspect_unquoted}''")
+    info?(path, follow_symlinks) || raise Errno.new("Unable to get info for '#{path.to_s.inspect_unquoted}''")
   end
 
   # Returns `true` if *path* exists else returns `false`
@@ -175,7 +175,7 @@ class File < IO::FileDescriptor
   def self.size(filename : Path | String) : UInt64
     info(filename).size
   rescue ex : Errno
-    raise Errno.new("Error determining size of '#{filename.inspect_unquoted}'", ex.errno)
+    raise Errno.new("Error determining size of '#{filename.to_s.inspect_unquoted}'", ex.errno)
   end
 
   # Returns `true` if the file at *path* is empty, otherwise returns `false`.
@@ -338,14 +338,17 @@ class File < IO::FileDescriptor
   # Converts *path* to an absolute path. Relative paths are
   # referenced from the current working directory of the process unless
   # *dir* is given, in which case it will be used as the starting point.
+  # "~" is expanded to the value passed to *home*.
+  # If it is `false` (default), home is not expanded.
+  # If `true`, it is expanded to the user's home directory (`Path.home`).
   #
   # ```
-  # File.expand_path("foo")             # => "/home/.../foo"
-  # File.expand_path("~/crystal/foo")   # => "/home/crystal/foo"
-  # File.expand_path("baz", "/foo/bar") # => "/foo/bar/baz"
+  # File.expand_path("foo")                 # => "/home/.../foo"
+  # File.expand_path("~/foo", home: "/bar") # => "/bar/foo"
+  # File.expand_path("baz", "/foo/bar")     # => "/foo/bar/baz"
   # ```
-  def self.expand_path(path, dir = nil) : String
-    Path.new(path).expand(dir || Dir.current).to_s
+  def self.expand_path(path, dir = nil, *, home = false) : String
+    Path.new(path).expand(dir || Dir.current, home: home).to_s
   end
 
   class BadPatternError < Exception
